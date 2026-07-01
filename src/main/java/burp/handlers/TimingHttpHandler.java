@@ -21,6 +21,17 @@ public class TimingHttpHandler implements HttpHandler {
 
     @Override
     public RequestToBeSentAction handleHttpRequestToBeSent(HttpRequestToBeSent requestToBeSent) {
+        // Header driven: bypassess toggle
+        if (requestToBeSent.hasHeader("X-OffTempo-Pool")) {
+            String pool = requestToBeSent.headerValue("X-OffTempo-Pool");
+            if ("A".equals(pool)) {
+                existingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+            } else if ("B".equals(pool)) {
+                nonExistingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+            }
+            return RequestToBeSentAction.continueWith(requestToBeSent.withRemovedHeader("X-OffTempo-Pool"));
+        }
+        // Native Burp capture
         if (requestToBeSent.toolSource().isFromTool(ToolType.INTRUDER) && mainPanel.isCaptureEnabled()) {
             String selected = mainPanel.getSelectedType();
             if ("Pool A".equals(selected)) {
