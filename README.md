@@ -52,3 +52,11 @@ The JAR is generated under `build/libs/`. Load it into Burp Suite as above.
 
 4.  **Run analysis**: Click **Run**. OffTempo computes the AUC score, plots both distributions, and outputs statistical metrics.
 <img width="1374" height="651" alt="Screenshot 2026-04-07 165149" src="https://github.com/user-attachments/assets/23c59882-310d-4c64-a129-da4f0755d08f" />
+
+## Advanced usage
+
+Instead of the capture toggle, you can tag a request's pool directly with the `X-OffTempo-Pool` header (`A` or `B`). Any request carrying it is assigned to that pool regardless of the UI toggle, no matter where it originates: an external CLI tool proxied through Burp, another Burp tool (Repeater, etc.), or another Burp extension. The header is stripped before the request is forwarded. For example, driving pools from the command line:
+
+```
+curl -sk --proxy http://127.0.0.1:8080 -H "X-OffTempo-Pool: A" https://example.com
+```
