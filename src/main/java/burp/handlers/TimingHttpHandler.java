@@ -45,16 +45,20 @@ public class TimingHttpHandler implements HttpHandler {
 
     @Override
     public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived responseReceived) {
-        if (responseReceived.toolSource().isFromTool(ToolType.INTRUDER) && mainPanel.isCaptureEnabled()) {
-            int messageId = responseReceived.messageId();
-            HttpRequestWithTimestamp request = existingRequestMap.remove(messageId);
+        // Adding to avoid request lookup when we have nothing stored in both maps (e.g when user is not using the Extension)
+        if (existingRequestMap.isEmpty() && nonExistingRequestMap.isEmpty()) {
+            return ResponseReceivedAction.continueWith(responseReceived);
+        }
+
+        // A messageId present in a map means that we tagged it for capture earlier
+        int messageId = responseReceived.messageId();
+        HttpRequestWithTimestamp request = existingRequestMap.remove(messageId);
+        if (request != null) {
+            mainPanel.addTiming("Pool A", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
+        } else {
+            request = nonExistingRequestMap.remove(messageId);
             if (request != null) {
-                mainPanel.addTiming("Pool A", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
-            } else {
-                request = nonExistingRequestMap.remove(messageId);
-                if (request != null) {
-                    mainPanel.addTiming("Pool B", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
-                }
+                mainPanel.addTiming("Pool B", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
             }
         }
         return ResponseReceivedAction.continueWith(responseReceived);
