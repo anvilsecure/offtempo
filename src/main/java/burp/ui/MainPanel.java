@@ -13,6 +13,7 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.util.concurrent.ExecutionException;
+import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
@@ -162,22 +163,40 @@ public class MainPanel {
 
         if (chooser.showSaveDialog(suiteFrame) != JFileChooser.APPROVE_OPTION) return;
 
-        java.io.File file = chooser.getSelectedFile();
-        if (!file.getName().endsWith(".csv")) {
-            file = new java.io.File(file.getAbsolutePath() + ".csv");
-        }
+        java.io.File selected = chooser.getSelectedFile();
+        java.io.File file = selected.getName().endsWith(".csv")
+                ? selected
+                : new java.io.File(selected.getAbsolutePath() + ".csv");
 
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write("Pool,Message ID,Elapsed (ms)\n");
-            for (TimingTable.ExportRow row : existingModel.getExportRows()) {
-                fw.write("A," + row.messageId() + "," + row.elapsed() + "\n");
+        // Snapshot rows on the EDT as table models are not thread-safe and could keep receiving timing data
+        List<TimingTable.ExportRow> rowsA = existingModel.getExportRows();
+        List<TimingTable.ExportRow> rowsB = nonExistingModel.getExportRows();
+
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws IOException {
+                try (BufferedWriter w = new BufferedWriter(new FileWriter(file))) {
+                    w.write("Pool,Message ID,Elapsed (ms)\n");
+                    for (TimingTable.ExportRow row : rowsA) {
+                        w.write("A," + row.messageId() + "," + row.elapsed() + "\n");
+                    }
+                    for (TimingTable.ExportRow row : rowsB) {
+                        w.write("B," + row.messageId() + "," + row.elapsed() + "\n");
+                    }
+                }
+                return null;
             }
-            for (TimingTable.ExportRow row : nonExistingModel.getExportRows()) {
-                fw.write("B," + row.messageId() + "," + row.elapsed() + "\n");
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                } catch (InterruptedException | ExecutionException ex) {
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(suiteFrame, "Error writing file: " + cause.getMessage(), "Export CSV", JOptionPane.ERROR_MESSAGE);
+                }
             }
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(suiteFrame, "Error writing file: " + ex.getMessage(), "Export CSV", JOptionPane.ERROR_MESSAGE);
-        }
+        }.execute();
     }
 
     private void clearPoolA() {

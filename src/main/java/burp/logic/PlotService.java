@@ -7,6 +7,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -51,7 +52,7 @@ public class PlotService {
         return lastChartPanel;
     }
 
-    public void saveLastPlot(Component parent) throws IOException {
+    public void saveLastPlot(Component parent) {
         if (lastChartPanel == null)
             throw new IllegalStateException("No plot to save.");
 
@@ -68,14 +69,30 @@ public class PlotService {
         }
 
         File f = chooser.getSelectedFile();
-        BitmapEncoder.saveBitmap(chart, f.getAbsolutePath(), BitmapEncoder.BitmapFormat.PNG);
 
-        JOptionPane.showMessageDialog(
-                parent,
-                "Plot saved successfully:\n" + f.getAbsolutePath(),
-                "Success",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws IOException {
+                BitmapEncoder.saveBitmap(chart, f.getAbsolutePath(), BitmapEncoder.BitmapFormat.PNG);
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    JOptionPane.showMessageDialog(
+                            parent,
+                            "Plot saved successfully:\n" + f.getAbsolutePath(),
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE
+                    );
+                } catch (InterruptedException | ExecutionException ex) {
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(parent, "Error saving plot: " + cause.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     public void clear() {
