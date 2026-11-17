@@ -32,6 +32,8 @@ public class MainPanel {
     private final StatsService statsService;
     private final PlotService plotService;
 
+    private volatile SwingWorker<TimingAnalysisResult, Void> analysisWorker;
+
     public MainPanel(StatsService statsService, PlotService plotService, Component suiteFrame) {
         this.statsService = statsService;
         this.plotService = plotService;
@@ -84,7 +86,7 @@ public class MainPanel {
 
         analysisPanel.setRunEnabled(false);
 
-        new SwingWorker<TimingAnalysisResult, Void>() {
+        analysisWorker = new SwingWorker<>() {
             @Override
             protected TimingAnalysisResult doInBackground() {
                 double[] a = existingTimes.stream().mapToDouble(Long::doubleValue).toArray();
@@ -94,6 +96,8 @@ public class MainPanel {
 
             @Override
             protected void done() {
+                analysisWorker = null;
+                if (isCancelled()) return;
                 try {
                     analysisPanel.showResult(get());
                     showPlot();
@@ -104,7 +108,8 @@ public class MainPanel {
                     analysisPanel.setRunEnabled(true);
                 }
             }
-        }.execute();
+        };
+        analysisWorker.execute();
     }
 
     private void showPlot() {
@@ -196,5 +201,14 @@ public class MainPanel {
     private void syncControls(int countA, int countB) {
         controlPanel.updateCounts(countA, countB);
         analysisPanel.setRunEnabled(countA > 0 && countB > 0);
+    }
+
+    public void dispose() {
+        SwingWorker<TimingAnalysisResult, Void> worker = analysisWorker;
+        if (worker != null) worker.cancel(true);
+        SwingUtilities.invokeLater(() -> {
+            clearTables();
+            plotService.clear();
+        });
     }
 }

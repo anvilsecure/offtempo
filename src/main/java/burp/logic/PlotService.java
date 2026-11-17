@@ -78,4 +78,8 @@ public class PlotService {
         );
     }
 
+    public void clear() {
+        lastChartPanel = null;
+    }
+
 }

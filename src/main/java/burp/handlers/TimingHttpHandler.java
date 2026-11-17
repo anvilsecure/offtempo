@@ -63,4 +63,9 @@ public class TimingHttpHandler implements HttpHandler {
         }
         return ResponseReceivedAction.continueWith(responseReceived);
     }
+
+    public void clear() {
+        existingRequestMap.clear();
+        nonExistingRequestMap.clear();
+    }
 }
