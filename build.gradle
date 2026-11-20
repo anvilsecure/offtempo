@@ -6,6 +6,7 @@ version '1.0.0'
 
 compileJava.sourceCompatibility = JavaVersion.VERSION_21
 compileJava.targetCompatibility = JavaVersion.VERSION_21
+compileJava.options.encoding = 'UTF-8'
 
 repositories {
     mavenCentral()
@@ -13,7 +14,6 @@ repositories {
 
 dependencies {
     compileOnly 'net.portswigger.burp.extensions:montoya-api:2025.8'
-    implementation 'com.google.code.gson:gson:2.10.+'
     compileOnly 'org.projectlombok:lombok:1.18.+'
     annotationProcessor 'org.projectlombok:lombok:1.18.+'
     implementation 'org.apache.commons:commons-math3:3.6.1'
@@ -21,7 +21,7 @@ dependencies {
 }
 
 tasks.register('bigJar', Jar) {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    from { configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
 }

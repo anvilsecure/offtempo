@@ -28,7 +28,7 @@ The primary metric is **AUC (Area Under the Curve) via Mann–Whitney U** - intu
 
 ### Build from source
 
-Requires Java 17+ and Gradle.
+Requires Java 21+ and Gradle.
 
 ```
 git clone https://github.com/anvilventures/offtempo.git
