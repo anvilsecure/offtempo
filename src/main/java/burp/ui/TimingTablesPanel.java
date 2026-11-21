@@ -3,6 +3,7 @@ package burp.ui;
 import burp.model.TimingTable;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 
@@ -16,6 +17,9 @@ public class TimingTablesPanel extends JPanel {
 
         existingTable.setRowSorter(new TableRowSorter<>(existing));
         nonExistingTable.setRowSorter(new TableRowSorter<>(nonExisting));
+
+        leftAlignNumbers(existingTable);
+        leftAlignNumbers(nonExistingTable);
 
         JScrollPane leftScroll = new JScrollPane(existingTable);
         JScrollPane rightScroll = new JScrollPane(nonExistingTable);
@@ -33,5 +37,13 @@ public class TimingTablesPanel extends JPanel {
         add(leftPanel);
         add(rightPanel);
         setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+    }
+
+    private static void leftAlignNumbers(JTable table) {
+        for (Class<?> type : new Class<?>[]{Integer.class, Double.class}) {
+            if (table.getDefaultRenderer(type) instanceof DefaultTableCellRenderer renderer) {
+                renderer.setHorizontalAlignment(SwingConstants.LEFT);
+            }
+        }
     }
 }
