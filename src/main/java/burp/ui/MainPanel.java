@@ -4,7 +4,6 @@ import burp.logic.PlotService;
 import burp.logic.StatsService;
 import burp.model.TimingAnalysisResult;
 import burp.model.TimingTable;
-import burp.model.HttpRequestWithTimestamp;
 import burp.logic.Winsorizer;
 import org.knowm.xchart.XChartPanel;
 import org.knowm.xchart.XYChart;
@@ -17,6 +16,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 public class MainPanel {
 
@@ -78,8 +78,8 @@ public class MainPanel {
     }
 
     private void runAnalysis() {
-        List<Long> existingTimes = existingModel.getAllTimings();
-        List<Long> nonExistingTimes = nonExistingModel.getAllTimings();
+        List<Double> existingTimes = existingModel.getAllTimings();
+        List<Double> nonExistingTimes = nonExistingModel.getAllTimings();
         if (existingTimes.isEmpty() || nonExistingTimes.isEmpty()) {
             JOptionPane.showMessageDialog(suiteFrame, "No data available", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -90,8 +90,8 @@ public class MainPanel {
         analysisWorker = new SwingWorker<>() {
             @Override
             protected TimingAnalysisResult doInBackground() {
-                double[] a = existingTimes.stream().mapToDouble(Long::doubleValue).toArray();
-                double[] b = nonExistingTimes.stream().mapToDouble(Long::doubleValue).toArray();
+                double[] a = existingTimes.stream().mapToDouble(Double::doubleValue).toArray();
+                double[] b = nonExistingTimes.stream().mapToDouble(Double::doubleValue).toArray();
                 return statsService.computeStats(a, b);
             }
 
@@ -118,8 +118,8 @@ public class MainPanel {
             if (existingModel.getAllTimings().isEmpty() || nonExistingModel.getAllTimings().isEmpty()) {
                 return;
             }
-            var existing = Winsorizer.winsorize(existingModel.getAllTimings().stream().map(Long::doubleValue).toList(), 0.95);
-            var nonExisting = Winsorizer.winsorize(nonExistingModel.getAllTimings().stream().map(Long::doubleValue).toList(), 0.95);
+            var existing = Winsorizer.winsorize(existingModel.getAllTimings(), 0.95);
+            var nonExisting = Winsorizer.winsorize(nonExistingModel.getAllTimings(), 0.95);
             XChartPanel<XYChart> panel = plotService.buildPairedScatter(existing, nonExisting);
             plotPanel.showPlot(panel);
         } catch (Exception ex) {
@@ -141,11 +141,10 @@ public class MainPanel {
 
     public boolean isCaptureEnabled() { return controlPanel.isCaptureEnabled(); }
     public String getSelectedType() { return controlPanel.getSelectedType(); }
-    public void addTiming(String targetType, int burpMessageId, long elapsedMs) {
+    public void addTiming(String targetType, int burpMessageId, double elapsedMs) {
         SwingUtilities.invokeLater(() -> {
-            HttpRequestWithTimestamp r = new HttpRequestWithTimestamp(burpMessageId, System.currentTimeMillis());
-            if ("Pool A".equals(targetType)) existingModel.addTiming(r, elapsedMs);
-            else nonExistingModel.addTiming(r, elapsedMs);
+            if ("Pool A".equals(targetType)) existingModel.addTiming(burpMessageId, elapsedMs);
+            else nonExistingModel.addTiming(burpMessageId, elapsedMs);
             syncControls(existingModel.getRowCount(), nonExistingModel.getRowCount());
         });
     }
@@ -178,10 +177,10 @@ public class MainPanel {
                 try (BufferedWriter w = new BufferedWriter(new FileWriter(file))) {
                     w.write("Pool,Message ID,Elapsed (ms)\n");
                     for (TimingTable.ExportRow row : rowsA) {
-                        w.write("A," + row.messageId() + "," + row.elapsed() + "\n");
+                        w.write(String.format(Locale.ROOT, "A,%d,%.3f\n", row.messageId(), row.elapsed()));
                     }
                     for (TimingTable.ExportRow row : rowsB) {
-                        w.write("B," + row.messageId() + "," + row.elapsed() + "\n");
+                        w.write(String.format(Locale.ROOT, "B,%d,%.3f\n", row.messageId(), row.elapsed()));
                     }
                 }
                 return null;
