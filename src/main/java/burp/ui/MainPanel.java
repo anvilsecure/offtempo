@@ -17,6 +17,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 public class MainPanel {
 
@@ -34,6 +35,7 @@ public class MainPanel {
     private final PlotService plotService;
 
     private volatile SwingWorker<TimingAnalysisResult, Void> analysisWorker;
+    private Consumer<String> poolClearedListener = pool -> {};
 
     public MainPanel(StatsService statsService, PlotService plotService, Component suiteFrame) {
         this.statsService = statsService;
@@ -198,17 +200,25 @@ public class MainPanel {
         }.execute();
     }
 
+    public void setPoolClearedListener(Consumer<String> listener) {
+        this.poolClearedListener = listener;
+    }
+
     private void clearPoolA() {
+        poolClearedListener.accept("Pool A");
         existingModel.clear();
         syncControls(0, nonExistingModel.getRowCount());
     }
 
     private void clearPoolB() {
+        poolClearedListener.accept("Pool B");
         nonExistingModel.clear();
         syncControls(existingModel.getRowCount(), 0);
     }
 
     private void clearTables() {
+        poolClearedListener.accept("Pool A");
+        poolClearedListener.accept("Pool B");
         existingModel.clear();
         nonExistingModel.clear();
         plotPanel.clearPlot();

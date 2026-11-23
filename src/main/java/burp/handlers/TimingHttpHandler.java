@@ -72,4 +72,9 @@ public class TimingHttpHandler implements HttpHandler {
         existingRequestMap.clear();
         nonExistingRequestMap.clear();
     }
+
+    public void clear(String pool) {
+        if ("Pool A".equals(pool)) existingRequestMap.clear();
+        else nonExistingRequestMap.clear();
+    }
 }

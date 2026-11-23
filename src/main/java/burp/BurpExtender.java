@@ -30,6 +30,7 @@ public class BurpExtender implements BurpExtension, ExtensionUnloadingHandler {
             Component suiteFrame = ui.swingUtils().suiteFrame();
             mainPanel = new MainPanel(statsService, plotService, suiteFrame);
             httpHandler = new TimingHttpHandler(mainPanel);
+            mainPanel.setPoolClearedListener(httpHandler::clear);
             ui.registerSuiteTab(extensionName, mainPanel.getRootPanel());
             api.http().registerHttpHandler(httpHandler);
         });
