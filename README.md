@@ -22,7 +22,7 @@ The primary metric is **AUC (Area Under the Curve) via Mann–Whitney U** - intu
 
 ### Prebuilt JAR (recommended)
 
-1. Download the latest `offtempo.jar` from the [Releases](https://github.com/anvilventures/offtempo/releases) page
+1. Download the latest `offtempo-<version>.jar` from the [Releases](https://github.com/anvilsecure/offtempo/releases) page
 2. In Burp Suite, go to **Extensions → Installed → Add**
 3. Set **Extension type: Java** and load the JAR
 
@@ -31,7 +31,7 @@ The primary metric is **AUC (Area Under the Curve) via Mann–Whitney U** - intu
 Requires Java 17+ and Gradle.
 
 ```
-git clone https://github.com/anvilventures/offtempo.git
+git clone https://github.com/anvilsecure/offtempo.git
 cd offtempo
 ./gradlew bigJar
 ```
