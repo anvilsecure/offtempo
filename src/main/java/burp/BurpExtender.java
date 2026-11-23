@@ -13,14 +13,15 @@ import java.awt.Component;
 public class BurpExtender implements BurpExtension, ExtensionUnloadingHandler {
 
     private MontoyaApi api;
-    private MainPanel mainPanel;
-    private TimingHttpHandler httpHandler;
+    private volatile MainPanel mainPanel;
+    private volatile TimingHttpHandler httpHandler;
     private final String extensionName = "OffTempo";
 
     @Override
     public void initialize(MontoyaApi api) {
         this.api = api;
         api.extension().setName(extensionName);
+        api.extension().registerUnloadingHandler(this);
         StatsService statsService = new StatsService();
         PlotService plotService = new PlotService();
 
@@ -29,14 +30,15 @@ public class BurpExtender implements BurpExtension, ExtensionUnloadingHandler {
             Component suiteFrame = ui.swingUtils().suiteFrame();
             mainPanel = new MainPanel(statsService, plotService, suiteFrame);
             httpHandler = new TimingHttpHandler(mainPanel);
+            mainPanel.setPoolClearedListener(httpHandler::clear);
             ui.registerSuiteTab(extensionName, mainPanel.getRootPanel());
             api.http().registerHttpHandler(httpHandler);
-            api.extension().registerUnloadingHandler(BurpExtender.this);
         });
     }
 
     @Override
     public void extensionUnloaded() {
-
-     }
+        if (httpHandler != null) httpHandler.clear();
+        if (mainPanel != null) mainPanel.dispose();
+    }
 }

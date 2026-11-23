@@ -9,6 +9,8 @@ import java.awt.*;
 public class AucPanel extends JPanel {
 
     private static final Color AMBER = new Color(0xFF, 0xA5, 0x00);
+    private static final int MIN_SAMPLES = 30;
+    private static final double SIGNIFICANCE_LEVEL = 0.05;
 
     private final JPanel resultPanel;
     private final JLabel aucLabel;
@@ -33,7 +35,7 @@ public class AucPanel extends JPanel {
         explanationLabel.setBorder(new EmptyBorder(2, 5, 2, 5));
         explanationLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        lowConfidenceLabel = new JLabel("⚠ Low confidence — collect more samples before drawing conclusions", SwingConstants.CENTER);
+        lowConfidenceLabel = new JLabel("", SwingConstants.CENTER);
         lowConfidenceLabel.setForeground(AMBER);
         lowConfidenceLabel.setBorder(new EmptyBorder(6, 5, 2, 5));
         lowConfidenceLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -64,14 +66,20 @@ public class AucPanel extends JPanel {
             interpretationPanel.setVisible(false);
         } else {
             int aucPercent = (int) Math.round(result.getAuc() * 100);
-            String pentestMsg = getPentestInterpretation(aucPercent);
+            String pentestMsg = getPentestInterpretation(aucPercent, result.getPValue() <= SIGNIFICANCE_LEVEL);
             aucLabel.setText("AUC: " + aucPercent + "% — " + pentestMsg);
 
             explanationLabel.setText(
                     "The AUC (Area Under Curve) shows how likely it is to correctly tell Plot A requests from Plot B based on response times."
             );
 
-            lowConfidenceLabel.setVisible(result.getPValue() > 0.05);
+            int minCount = Math.min(result.getPlotAStats().getCount(), result.getPlotBStats().getCount());
+            if (minCount < MIN_SAMPLES) {
+                lowConfidenceLabel.setText("⚠ Low confidence. Only " + minCount + " samples in the smallest pool, aim for at least " + MIN_SAMPLES + " per pool");
+                lowConfidenceLabel.setVisible(true);
+            } else {
+                lowConfidenceLabel.setVisible(false);
+            }
 
             resultPanel.add(aucLabel);
             resultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
@@ -98,8 +106,12 @@ public class AucPanel extends JPanel {
         interpretationPanel.repaint();
     }
 
-    private String getPentestInterpretation(int aucPercent) {
-        if (aucPercent < 70) return "Not distinguishable — likely just noise";
+    private String getPentestInterpretation(int aucPercent, boolean significant) {
+        if (aucPercent < 70) {
+            return significant
+                    ? "Weak signal — small but consistent difference"
+                    : "Not distinguishable — likely just noise";
+        }
         if (aucPercent < 80) return "Moderate signal — some differentiation between requests";
         if (aucPercent < 90) return "Strong signal — requests are meaningfully different";
         return "Very strong signal — behavior clearly differs";
@@ -109,7 +121,7 @@ public class AucPanel extends JPanel {
         return """
         <html>
         <b>AUC interpretation</b><br>
-        <b>&lt;70%</b> — likely noise<br>
+        <b>&lt;70%</b> — likely noise, or weak signal if consistent<br>
         <b>70%–80%</b> — moderate evidence<br>
         <b>80%–90%</b> — strong evidence<br>
         <b>&gt;90%</b> — very strong evidence<br>

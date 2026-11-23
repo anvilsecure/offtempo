@@ -22,7 +22,7 @@ The primary metric is **AUC (Area Under the Curve) via Mann–Whitney U** - intu
 
 ### Prebuilt JAR (recommended)
 
-1. Download the latest `offtempo.jar` from the [Releases](https://github.com/anvilventures/offtempo/releases) page
+1. Download the latest `offtempo-<version>.jar` from the [Releases](https://github.com/anvilsecure/offtempo/releases) page
 2. In Burp Suite, go to **Extensions → Installed → Add**
 3. Set **Extension type: Java** and load the JAR
 
@@ -31,7 +31,7 @@ The primary metric is **AUC (Area Under the Curve) via Mann–Whitney U** - intu
 Requires Java 21+ and Gradle.
 
 ```
-git clone https://github.com/anvilventures/offtempo.git
+git clone https://github.com/anvilsecure/offtempo.git
 cd offtempo
 ./gradlew bigJar
 ```
@@ -59,4 +59,26 @@ Instead of the capture toggle, you can tag a request's pool directly with the `X
 
 ```
 curl -sk --proxy http://127.0.0.1:8080 -H "X-OffTempo-Pool: A" https://example.com
+```
+
+### Interleaving pools in a single Intruder attack
+
+Filling both Pool A and Pool B in a single Intruder attack prevents changes in network or server conditions (congestion, server load, cache warm-up) from being mistaken for a timing difference between the pools.
+To do so, use a Burp Intruder **Pitchfork** attack with two positions, the input under test and the `X-OffTempo-Pool` header value:
+
+```
+GET /login?username=§alice§ HTTP/2
+Host: example.com
+X-OffTempo-Pool: §A§
+```
+
+- **Payload position 1**: a simple list alternating the two inputs (`alice`, `nonexistent`, `alice`, `nonexistent`, …)
+- **Payload position 2**: a simple list alternating `A`, `B`, `A`, `B`, …
+- **Resource pool**: maximum concurrent requests set to 1, so requests are sent strictly in order
+
+Both lists must have the same length and the same order. You can generate payloads with something like:
+
+```
+for i in $(seq 100); do echo alice; echo nonexistent; done
+for i in $(seq 100); do echo A; echo B; done
 ```

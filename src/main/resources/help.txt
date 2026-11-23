@@ -1,2 +1,3 @@
 By enabling timing capture, OffTempo will record the timing data of every Intruder request in the selected Pool.
 Populate the two pools with the requests you want to analyze and click Run.
+Alternatively, any request with the X-OffTempo-Pool header (A or B) is assigned to that pool regardless of the toggle. See README for more info.

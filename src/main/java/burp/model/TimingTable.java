@@ -7,11 +7,11 @@ import java.util.List;
 public class TimingTable extends AbstractTableModel {
 
     private static class Row {
-        final HttpRequestWithTimestamp req;
-        final long elapsed;
+        final int messageId;
+        final double elapsed;
 
-        Row(HttpRequestWithTimestamp req, long elapsed) {
-            this.req = req;
+        Row(int messageId, double elapsed) {
+            this.messageId = messageId;
             this.elapsed = elapsed;
         }
     }
@@ -23,8 +23,8 @@ public class TimingTable extends AbstractTableModel {
             "Elapsed (ms)"
     };
 
-    public void addTiming(HttpRequestWithTimestamp req, long elapsed) {
-        rows.add(new Row(req, elapsed));
+    public void addTiming(int messageId, double elapsed) {
+        rows.add(new Row(messageId, elapsed));
         fireTableRowsInserted(rows.size() - 1, rows.size() - 1);
     }
 
@@ -49,29 +49,38 @@ public class TimingTable extends AbstractTableModel {
     }
 
     @Override
+    public Class<?> getColumnClass(int column) {
+        return switch (column) {
+            case 0 -> Integer.class;
+            case 1 -> Double.class;
+            default -> Object.class;
+        };
+    }
+
+    @Override
     public Object getValueAt(int rowIndex, int col) {
         Row row = rows.get(rowIndex);
         return switch (col) {
-            case 0 -> row.req.burpMessageId;
+            case 0 -> row.messageId;
             case 1 -> row.elapsed;
             default -> "";
         };
     }
 
-    public List<Long> getAllTimings() {
-        List<Long> result = new ArrayList<>(rows.size());
+    public List<Double> getAllTimings() {
+        List<Double> result = new ArrayList<>(rows.size());
         for (Row r : rows) {
             result.add(r.elapsed);
         }
         return result;
     }
 
-    public record ExportRow(int messageId, long elapsed) {}
+    public record ExportRow(int messageId, double elapsed) {}
 
     public List<ExportRow> getExportRows() {
         List<ExportRow> result = new ArrayList<>(rows.size());
         for (Row r : rows) {
-            result.add(new ExportRow(r.req.burpMessageId, r.elapsed));
+            result.add(new ExportRow(r.messageId, r.elapsed));
         }
         return result;
     }

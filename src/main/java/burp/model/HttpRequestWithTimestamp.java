@@ -7,6 +7,6 @@ import lombok.Getter;
 @AllArgsConstructor
 public class HttpRequestWithTimestamp {
     final int burpMessageId;
-    final long sendTimestamp;
+    final long sendNanoTime;
 
 }

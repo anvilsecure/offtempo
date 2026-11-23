@@ -25,9 +25,9 @@ public class TimingHttpHandler implements HttpHandler {
         if (requestToBeSent.hasHeader("X-OffTempo-Pool")) {
             String pool = requestToBeSent.headerValue("X-OffTempo-Pool");
             if ("A".equals(pool)) {
-                existingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+                existingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.nanoTime()));
             } else if ("B".equals(pool)) {
-                nonExistingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+                nonExistingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.nanoTime()));
             }
             return RequestToBeSentAction.continueWith(requestToBeSent.withRemovedHeader("X-OffTempo-Pool"));
         }
@@ -35,9 +35,9 @@ public class TimingHttpHandler implements HttpHandler {
         if (requestToBeSent.toolSource().isFromTool(ToolType.INTRUDER) && mainPanel.isCaptureEnabled()) {
             String selected = mainPanel.getSelectedType();
             if ("Pool A".equals(selected)) {
-                existingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+                existingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.nanoTime()));
             } else {
-                nonExistingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.currentTimeMillis()));
+                nonExistingRequestMap.put(requestToBeSent.messageId(), new HttpRequestWithTimestamp(requestToBeSent.messageId(), System.nanoTime()));
             }
         }
         return RequestToBeSentAction.continueWith(requestToBeSent);
@@ -54,13 +54,27 @@ public class TimingHttpHandler implements HttpHandler {
         int messageId = responseReceived.messageId();
         HttpRequestWithTimestamp request = existingRequestMap.remove(messageId);
         if (request != null) {
-            mainPanel.addTiming("Pool A", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
+            mainPanel.addTiming("Pool A", request.getBurpMessageId(), elapsedMs(request));
         } else {
             request = nonExistingRequestMap.remove(messageId);
             if (request != null) {
-                mainPanel.addTiming("Pool B", request.getBurpMessageId(), System.currentTimeMillis() - request.getSendTimestamp());
+                mainPanel.addTiming("Pool B", request.getBurpMessageId(), elapsedMs(request));
             }
         }
         return ResponseReceivedAction.continueWith(responseReceived);
+    }
+
+    private static double elapsedMs(HttpRequestWithTimestamp request) {
+        return (System.nanoTime() - request.getSendNanoTime()) / 1_000_000.0;
+    }
+
+    public void clear() {
+        existingRequestMap.clear();
+        nonExistingRequestMap.clear();
+    }
+
+    public void clear(String pool) {
+        if ("Pool A".equals(pool)) existingRequestMap.clear();
+        else nonExistingRequestMap.clear();
     }
 }

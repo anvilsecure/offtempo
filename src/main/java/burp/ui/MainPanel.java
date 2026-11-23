@@ -4,7 +4,6 @@ import burp.logic.PlotService;
 import burp.logic.StatsService;
 import burp.model.TimingAnalysisResult;
 import burp.model.TimingTable;
-import burp.model.HttpRequestWithTimestamp;
 import burp.logic.Winsorizer;
 import org.knowm.xchart.XChartPanel;
 import org.knowm.xchart.XYChart;
@@ -13,9 +12,12 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.util.concurrent.ExecutionException;
+import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.Consumer;
 
 public class MainPanel {
 
@@ -31,6 +33,9 @@ public class MainPanel {
 
     private final StatsService statsService;
     private final PlotService plotService;
+
+    private volatile SwingWorker<TimingAnalysisResult, Void> analysisWorker;
+    private Consumer<String> poolClearedListener = pool -> {};
 
     public MainPanel(StatsService statsService, PlotService plotService, Component suiteFrame) {
         this.statsService = statsService;
@@ -75,8 +80,8 @@ public class MainPanel {
     }
 
     private void runAnalysis() {
-        List<Long> existingTimes = existingModel.getAllTimings();
-        List<Long> nonExistingTimes = nonExistingModel.getAllTimings();
+        List<Double> existingTimes = existingModel.getAllTimings();
+        List<Double> nonExistingTimes = nonExistingModel.getAllTimings();
         if (existingTimes.isEmpty() || nonExistingTimes.isEmpty()) {
             JOptionPane.showMessageDialog(suiteFrame, "No data available", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -84,16 +89,18 @@ public class MainPanel {
 
         analysisPanel.setRunEnabled(false);
 
-        new SwingWorker<TimingAnalysisResult, Void>() {
+        analysisWorker = new SwingWorker<>() {
             @Override
             protected TimingAnalysisResult doInBackground() {
-                double[] a = existingTimes.stream().mapToDouble(Long::doubleValue).toArray();
-                double[] b = nonExistingTimes.stream().mapToDouble(Long::doubleValue).toArray();
+                double[] a = existingTimes.stream().mapToDouble(Double::doubleValue).toArray();
+                double[] b = nonExistingTimes.stream().mapToDouble(Double::doubleValue).toArray();
                 return statsService.computeStats(a, b);
             }
 
             @Override
             protected void done() {
+                analysisWorker = null;
+                if (isCancelled()) return;
                 try {
                     analysisPanel.showResult(get());
                     showPlot();
@@ -104,7 +111,8 @@ public class MainPanel {
                     analysisPanel.setRunEnabled(true);
                 }
             }
-        }.execute();
+        };
+        analysisWorker.execute();
     }
 
     private void showPlot() {
@@ -112,8 +120,8 @@ public class MainPanel {
             if (existingModel.getAllTimings().isEmpty() || nonExistingModel.getAllTimings().isEmpty()) {
                 return;
             }
-            var existing = Winsorizer.winsorize(existingModel.getAllTimings().stream().map(Long::doubleValue).toList(), 0.95);
-            var nonExisting = Winsorizer.winsorize(nonExistingModel.getAllTimings().stream().map(Long::doubleValue).toList(), 0.95);
+            var existing = Winsorizer.winsorize(existingModel.getAllTimings(), 0.95);
+            var nonExisting = Winsorizer.winsorize(nonExistingModel.getAllTimings(), 0.95);
             XChartPanel<XYChart> panel = plotService.buildPairedScatter(existing, nonExisting);
             plotPanel.showPlot(panel);
         } catch (Exception ex) {
@@ -135,11 +143,10 @@ public class MainPanel {
 
     public boolean isCaptureEnabled() { return controlPanel.isCaptureEnabled(); }
     public String getSelectedType() { return controlPanel.getSelectedType(); }
-    public void addTiming(String targetType, int burpMessageId, long elapsedMs) {
+    public void addTiming(String targetType, int burpMessageId, double elapsedMs) {
         SwingUtilities.invokeLater(() -> {
-            HttpRequestWithTimestamp r = new HttpRequestWithTimestamp(burpMessageId, System.currentTimeMillis());
-            if ("Pool A".equals(targetType)) existingModel.addTiming(r, elapsedMs);
-            else nonExistingModel.addTiming(r, elapsedMs);
+            if ("Pool A".equals(targetType)) existingModel.addTiming(burpMessageId, elapsedMs);
+            else nonExistingModel.addTiming(burpMessageId, elapsedMs);
             syncControls(existingModel.getRowCount(), nonExistingModel.getRowCount());
         });
     }
@@ -157,35 +164,61 @@ public class MainPanel {
 
         if (chooser.showSaveDialog(suiteFrame) != JFileChooser.APPROVE_OPTION) return;
 
-        java.io.File file = chooser.getSelectedFile();
-        if (!file.getName().endsWith(".csv")) {
-            file = new java.io.File(file.getAbsolutePath() + ".csv");
-        }
+        java.io.File selected = chooser.getSelectedFile();
+        java.io.File file = selected.getName().endsWith(".csv")
+                ? selected
+                : new java.io.File(selected.getAbsolutePath() + ".csv");
 
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write("Pool,Message ID,Elapsed (ms)\n");
-            for (TimingTable.ExportRow row : existingModel.getExportRows()) {
-                fw.write("A," + row.messageId() + "," + row.elapsed() + "\n");
+        // Snapshot rows on the EDT as table models are not thread-safe and could keep receiving timing data
+        List<TimingTable.ExportRow> rowsA = existingModel.getExportRows();
+        List<TimingTable.ExportRow> rowsB = nonExistingModel.getExportRows();
+
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws IOException {
+                try (BufferedWriter w = new BufferedWriter(new FileWriter(file))) {
+                    w.write("Pool,Message ID,Elapsed (ms)\n");
+                    for (TimingTable.ExportRow row : rowsA) {
+                        w.write(String.format(Locale.ROOT, "A,%d,%.3f\n", row.messageId(), row.elapsed()));
+                    }
+                    for (TimingTable.ExportRow row : rowsB) {
+                        w.write(String.format(Locale.ROOT, "B,%d,%.3f\n", row.messageId(), row.elapsed()));
+                    }
+                }
+                return null;
             }
-            for (TimingTable.ExportRow row : nonExistingModel.getExportRows()) {
-                fw.write("B," + row.messageId() + "," + row.elapsed() + "\n");
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                } catch (InterruptedException | ExecutionException ex) {
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    JOptionPane.showMessageDialog(suiteFrame, "Error writing file: " + cause.getMessage(), "Export CSV", JOptionPane.ERROR_MESSAGE);
+                }
             }
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(suiteFrame, "Error writing file: " + ex.getMessage(), "Export CSV", JOptionPane.ERROR_MESSAGE);
-        }
+        }.execute();
+    }
+
+    public void setPoolClearedListener(Consumer<String> listener) {
+        this.poolClearedListener = listener;
     }
 
     private void clearPoolA() {
+        poolClearedListener.accept("Pool A");
         existingModel.clear();
         syncControls(0, nonExistingModel.getRowCount());
     }
 
     private void clearPoolB() {
+        poolClearedListener.accept("Pool B");
         nonExistingModel.clear();
         syncControls(existingModel.getRowCount(), 0);
     }
 
     private void clearTables() {
+        poolClearedListener.accept("Pool A");
+        poolClearedListener.accept("Pool B");
         existingModel.clear();
         nonExistingModel.clear();
         plotPanel.clearPlot();
@@ -196,5 +229,14 @@ public class MainPanel {
     private void syncControls(int countA, int countB) {
         controlPanel.updateCounts(countA, countB);
         analysisPanel.setRunEnabled(countA > 0 && countB > 0);
+    }
+
+    public void dispose() {
+        SwingWorker<TimingAnalysisResult, Void> worker = analysisWorker;
+        if (worker != null) worker.cancel(true);
+        SwingUtilities.invokeLater(() -> {
+            clearTables();
+            plotService.clear();
+        });
     }
 }
